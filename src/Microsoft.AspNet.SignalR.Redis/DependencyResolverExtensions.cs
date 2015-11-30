@@ -38,5 +38,22 @@ namespace Microsoft.AspNet.SignalR
 
             return resolver;
         }
+
+        /// <summary>
+        /// Use Redis as the messaging backplane for scaling out of ASP.NET SignalR applications in a web farm.
+        /// </summary>
+        /// <param name="resolver">The dependency resolver</param>
+        /// <param name="multiplexer">The connection multiplexer to use</param> 
+        /// <param name="eventKey">The Redis event key to use.</param>
+        /// <returns>The dependency resolver.</returns>
+        public static IDependencyResolver UseRedis(this IDependencyResolver resolver, ConnectionMultiplexer multiplexer, string eventKey)
+        {
+            RedisScaleoutConfiguration configuration = new RedisScaleoutConfiguration(multiplexer.Configuration, eventKey);
+
+            var bus = new Lazy<RedisMessageBus>(() => new RedisMessageBus(resolver, configuration, new RedisConnection(), multiplexer));
+            resolver.Register(typeof(IMessageBus), () => bus.Value);
+
+            return resolver;
+        }
     }
 }

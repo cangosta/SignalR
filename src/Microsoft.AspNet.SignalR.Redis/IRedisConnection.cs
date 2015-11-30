@@ -1,4 +1,5 @@
-﻿using System;
+﻿using StackExchange.Redis;
+using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
@@ -6,6 +7,8 @@ namespace Microsoft.AspNet.SignalR.Redis
 {
     public interface IRedisConnection
     {
+        Task InitializeConnection(ConnectionMultiplexer multiplexer, TraceSource trace);
+
         Task ConnectAsync(string connectionString, TraceSource trace);
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1026:DefaultParametersShouldNotBeUsed")]

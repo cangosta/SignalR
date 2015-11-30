@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNet.SignalR.Messaging;
 using Microsoft.AspNet.SignalR.Tracing;
+using StackExchange.Redis;
 
 namespace Microsoft.AspNet.SignalR.Redis
 {
@@ -23,6 +24,7 @@ namespace Microsoft.AspNet.SignalR.Redis
         private readonly TraceSource _trace;
 
         private IRedisConnection _connection;
+        private ConnectionMultiplexer _multiplexer;
         private string _connectionString;
         private int _state;
         private readonly object _callbackLock = new object();
@@ -61,6 +63,51 @@ namespace Microsoft.AspNet.SignalR.Redis
                 });
             }
         }
+
+
+
+
+
+
+        public RedisMessageBus(IDependencyResolver resolver, RedisScaleoutConfiguration configuration, IRedisConnection connection, ConnectionMultiplexer multiplexer)
+            : this(resolver, configuration, connection, multiplexer, true)
+        {
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Performance", "CA1804:RemoveUnusedLocals", MessageId = "ignore")]
+        internal RedisMessageBus(IDependencyResolver resolver, RedisScaleoutConfiguration configuration, IRedisConnection connection, ConnectionMultiplexer multiplexer, bool connectAutomatically)
+            : base(resolver, configuration)
+        {
+            if (configuration == null)
+            {
+                throw new ArgumentNullException("configuration");
+            }
+
+            _connection = connection;
+
+            _multiplexer = multiplexer;
+
+            _connectionString = configuration.ConnectionString;
+            _db = configuration.Database;
+            _key = configuration.EventKey;
+
+            var traceManager = resolver.Resolve<ITraceManager>();
+
+            _trace = traceManager["SignalR." + typeof(RedisMessageBus).Name];
+
+            ReconnectDelay = TimeSpan.FromSeconds(2);
+
+            if (connectAutomatically)
+            {
+                ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    var ignore = ConnectWithRetry();
+                });
+            }
+        }
+
+
+
 
         public TimeSpan ReconnectDelay { get; set; }
 
@@ -200,8 +247,14 @@ namespace Microsoft.AspNet.SignalR.Redis
 
             _trace.TraceInformation("Connecting...");
 
-            await _connection.ConnectAsync(_connectionString, _trace);
-
+            if (_multiplexer == null) {
+                await _connection.ConnectAsync(_connectionString, _trace);
+            }
+            else
+            {
+                await _connection.InitializeConnection(_multiplexer, _trace);
+            }
+            
             _trace.TraceInformation("Connection opened");
 
             _connection.ConnectionFailed += OnConnectionFailed;

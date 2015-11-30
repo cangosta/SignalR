@@ -8,13 +8,26 @@ namespace Microsoft.AspNet.SignalR.Redis
     public class RedisConnection : IRedisConnection
     {
         private StackExchange.Redis.ISubscriber _redisSubscriber;
-        private ConnectionMultiplexer _connection;
+        private ConnectionMultiplexer _connection = null;
         private TraceSource _trace;
         private ulong _latestMessageId;
 
         public async Task ConnectAsync(string connectionString, TraceSource trace)
         {
             _connection = await ConnectionMultiplexer.ConnectAsync(connectionString);
+
+            _connection.ConnectionFailed += OnConnectionFailed;
+            _connection.ConnectionRestored += OnConnectionRestored;
+            _connection.ErrorMessage += OnError;
+
+            _trace = trace;
+
+            _redisSubscriber = _connection.GetSubscriber();
+        }
+
+        public async Task InitializeConnection(ConnectionMultiplexer multiplexer, TraceSource trace)
+        {
+            _connection = await new Task<ConnectionMultiplexer>(() => multiplexer);
 
             _connection.ConnectionFailed += OnConnectionFailed;
             _connection.ConnectionRestored += OnConnectionRestored;
